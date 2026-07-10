@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+/* Brand palette — single source of truth for the app's accent colors.
+   Defining these in @theme also generates text-/bg-/border-/from-/via-/to-*
+   utilities (and their hover:/focus:/etc. variants) for free. */
+@theme {
+  --color-brand-yellow: #fde047;
+  --color-brand-orange: #fb923c;
+  --color-brand-rose: #f43f5e;
+  --color-brand-rose-dark: #be123c;
+  --color-brand-purple: #a21caf;
+}
+
+.title-gradient {
+  background-image: linear-gradient(
+    to right,
+    var(--color-brand-yellow),
+    var(--color-brand-orange),
+    var(--color-brand-rose),
+    var(--color-brand-purple)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Primary-action button gradient (Sign In, Save, Place Order, etc.) */
+.brand-gradient-bg {
+  background-image: linear-gradient(
+    to right,
+    var(--color-brand-orange),
+    var(--color-brand-rose),
+    var(--color-brand-purple)
+  );
+}
