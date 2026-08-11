@@ -37,7 +37,7 @@ laravel-vue-demo/
 - **Frontend** is a standalone SPA. In development, Vite proxies `/api/auth/*` to the Node server and everything else under `/api/*` to Laravel (`vite.config.js`) — both land on the same browser origin as the SPA, so cookies flow automatically with no CORS/credentials configuration needed anywhere.
 - `npm run dev` in `backend/` starts **both** Laravel's Vite asset build and the Node auth server together (via `concurrently`) — it does not start `php artisan serve`, which still needs to run separately.
 
-### Data model
+### Database schema
 
 | Model | Notes |
 |---|---|
@@ -48,6 +48,68 @@ laravel-vue-demo/
 | `AuthUser` / `AuthSession` | read-only Eloquent views over better-auth's own `user`/`session` tables (non-incrementing string/cuid primary keys — see `$incrementing`/`$keyType` on both models) |
 
 Order creation is wrapped in a DB transaction: an order and all its line items are created together, with the total computed server-side from live product prices — the client never sends a total.
+
+Below is the full schema, spanning both Laravel's own tables (`product`, `customer`, `order`, `order_item`) and better-auth's tables (`user`, `session`, `account`) which live in the same SQLite file but are created/owned by the Node auth server, not a Laravel migration. `customer.user_id` is a **soft link** — Laravel can't declare a real foreign key into a table it doesn't manage, so it's enforced only at the application layer. better-auth also has a `verification` table (used for email/token verification flows) that isn't shown below since it has no relationship to any other table.
+
+```mermaid
+erDiagram
+    USER ||--o| CUSTOMER : "links to (soft FK)"
+    USER ||--o{ SESSION : "has"
+    USER ||--o{ ACCOUNT : "has"
+    CUSTOMER ||--o{ ORDER : "places"
+    ORDER ||--o{ ORDER_ITEM : "contains"
+    PRODUCT ||--o{ ORDER_ITEM : "ordered as"
+
+    USER {
+        string id PK
+        string name
+        string email UK
+        boolean emailVerified
+        string role
+        datetime createdAt
+        datetime updatedAt
+    }
+    SESSION {
+        string id PK
+        string userId FK
+        string token UK
+        datetime expiresAt
+    }
+    ACCOUNT {
+        string id PK
+        string userId FK
+        string providerId
+        string password
+    }
+    CUSTOMER {
+        int id PK
+        string user_id FK "soft, unique, nullable"
+        string name
+        string email UK
+        string phone
+        string address
+    }
+    ORDER {
+        int id PK
+        int customer_id FK
+        string status
+        decimal total
+    }
+    ORDER_ITEM {
+        int id PK
+        int order_id FK
+        int product_id FK
+        int quantity
+        decimal unit_price
+    }
+    PRODUCT {
+        int id PK
+        string name
+        string sku UK
+        text description
+        decimal price
+    }
+```
 
 **How a login becomes a customer:** `Customer` isn't created at signup. The first time a non-admin places an order, Laravel finds-or-creates a `Customer` row matched by email and links it to that user's id (`OrderController::resolveOwnCustomer`) — an admin-created `Customer` with a matching email gets claimed rather than duplicated.
 
@@ -95,6 +157,44 @@ zion.admin@zionindustries.com / ZionAdmin!
 
 - **Server-side**, in `UpdateOrderStatusRequest` — the requested status must be in the current status's `availableTransitions()`, or the request 422s. This is the actual boundary; it can't be bypassed by calling the API directly.
 - **Client-side**, the status dropdown on the order detail page only ever offers `order.available_statuses` (computed server-side and returned on the `OrderResource`) and disappears entirely once an order is terminal.
+
+## API reference
+
+All endpoints below are prefixed `/api` and served by Laravel (`routes/api.php`). `App\Http\Middleware\BetterAuthSession` resolves the session cookie on every request; `auth.required` (aliased to `RequireAuth`) enforces login where the table says so; admin checks happen inside the controller (`requireAdmin()`), not via route middleware. `/api/auth/*` (sign-up, sign-in, sign-out, session lookup, etc.) is handled separately by the better-auth Node server, not Laravel — see [better-auth's docs](https://better-auth.com/docs) for that endpoint list.
+
+**Products** (`Api\ProductController`)
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| GET | `/api/products` | Public | List products |
+| GET | `/api/products/{id}` | Public | Show one product |
+| POST | `/api/products` | Admin | Create a product |
+| PUT/PATCH | `/api/products/{id}` | Admin | Update a product |
+| DELETE | `/api/products/{id}` | Admin | Delete a product |
+
+**Customers** (`Api\CustomerController`)
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| GET | `/api/customers` | Admin | List customers |
+| POST | `/api/customers` | Admin | Create a customer |
+| GET | `/api/customers/{id}` | Admin | Show one customer |
+| PUT/PATCH | `/api/customers/{id}` | Admin | Update a customer |
+| DELETE | `/api/customers/{id}` | Admin | Delete a customer |
+
+**Orders** (`Api\OrderController`)
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| GET | `/api/orders` | Logged in | List orders (own orders for a customer, all orders for an admin) |
+| POST | `/api/orders` | Logged in | Place an order (for self; an admin may specify `customer_id`) |
+| GET | `/api/orders/{id}` | Logged in | Show one order (own only, unless admin) |
+| PATCH | `/api/orders/{id}/status` | Admin | Advance the order's status (validated against `OrderStatus::availableTransitions()`) |
+| DELETE | `/api/orders/{id}` | Admin | Delete an order |
+
+There's no `PUT/PATCH /api/orders/{id}` for editing an order wholesale — status is the only thing that changes after creation, via the dedicated endpoint above (see [Order status rules](#order-status-rules)).
+
+Request validation lives in `Http/Requests` and response shaping in `Http/Resources` (one of each per resource, see [Project structure](#project-structure)) — read those for exact field-level detail.
 
 ## Prerequisites
 
