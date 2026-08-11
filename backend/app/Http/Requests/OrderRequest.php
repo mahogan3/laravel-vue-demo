@@ -26,6 +26,9 @@ class OrderRequest extends FormRequest
         // customer_id from the session rather than accepting it from the client.
         if ($this->attributes->get('authUser')?->isAdmin()) {
             $rules['customer_id'] = ['required', 'integer', 'exists:customers,id'];
+        } else {
+            $rules['phone'] = ['required', 'string', 'max:255'];
+            $rules['address'] = ['required', 'string', 'max:255'];
         }
 
         return $rules;

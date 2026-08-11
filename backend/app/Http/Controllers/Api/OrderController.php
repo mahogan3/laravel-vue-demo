@@ -36,7 +36,7 @@ class OrderController extends Controller
         $order = DB::transaction(function () use ($request, $user) {
             $customerId = $user->isAdmin()
                 ? $request->validated('customer_id')
-                : $this->resolveOwnCustomer($user)->id;
+                : $this->resolveOwnCustomer($user, $request->validated('phone'), $request->validated('address'))->id;
 
             $order = Order::create([
                 'customer_id' => $customerId,
@@ -97,19 +97,20 @@ class OrderController extends Controller
     /**
      * Find-or-create the Customer record linked to a non-admin's account,
      * matching by email first so an admin-created customer gets claimed
-     * rather than duplicated.
+     * rather than duplicated. Phone/address are required on every order
+     * request and kept in sync on the Customer record.
      */
-    private function resolveOwnCustomer(AuthUser $user): Customer
+    private function resolveOwnCustomer(AuthUser $user, string $phone, string $address): Customer
     {
         $customer = Customer::where('email', $user->email)->first();
 
-        if ($customer && ! $customer->user_id) {
-            $customer->update(['user_id' => $user->id]);
-
-            return $customer;
-        }
-
         if ($customer) {
+            $customer->update([
+                'user_id' => $customer->user_id ?: $user->id,
+                'phone' => $phone,
+                'address' => $address,
+            ]);
+
             return $customer;
         }
 
@@ -117,6 +118,8 @@ class OrderController extends Controller
             'user_id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
+            'phone' => $phone,
+            'address' => $address,
         ]);
     }
 }

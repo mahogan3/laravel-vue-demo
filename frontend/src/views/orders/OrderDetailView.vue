@@ -41,6 +41,7 @@ onMounted(load)
         <p class="font-medium text-slate-100">{{ order.customer.name }}</p>
         <p class="text-slate-400">{{ order.customer.email }}</p>
         <p class="text-slate-400">{{ order.customer.phone }}</p>
+        <p class="text-slate-400">{{ order.customer.address }}</p>
       </div>
       <div>
         <p class="text-slate-400">Placed</p>

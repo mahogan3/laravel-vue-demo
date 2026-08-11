@@ -14,6 +14,8 @@ const isAdmin = computed(() => session.value.data?.user?.role === 'admin')
 const customers = ref([])
 const products = ref([])
 const customerId = ref('')
+const phone = ref('')
+const address = ref('')
 const lines = ref([{ productId: '', quantity: 1 }])
 const errors = ref({})
 const saving = ref(false)
@@ -42,7 +44,11 @@ const total = computed(() =>
 )
 
 const canSubmit = computed(
-  () => (!isAdmin.value || customerId.value !== '') && lines.value.some((l) => l.productId)
+  () =>
+    (isAdmin.value
+      ? customerId.value !== ''
+      : phone.value.trim() !== '' && address.value.trim() !== '') &&
+    lines.value.some((l) => l.productId)
 )
 
 async function save() {
@@ -50,7 +56,9 @@ async function save() {
   errors.value = {}
   try {
     const order = await createOrder({
-      ...(isAdmin.value ? { customer_id: customerId.value } : {}),
+      ...(isAdmin.value
+        ? { customer_id: customerId.value }
+        : { phone: phone.value, address: address.value }),
       items: lines.value
         .filter((l) => l.productId)
         .map((l) => ({ product_id: l.productId, quantity: l.quantity })),
@@ -80,6 +88,30 @@ async function save() {
           <option v-for="c in customers" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
         <p v-if="errors.customer_id" class="text-brand-rose text-sm mt-1">{{ errors.customer_id[0] }}</p>
+      </div>
+
+      <div v-else class="space-y-4">
+        <div>
+          <label class="title-gradient block text-sm font-semibold">Phone <span class="text-brand-rose">*</span></label>
+          <input
+            v-model="phone"
+            type="text"
+            required
+            class="mt-1 w-full border border-purple-400 rounded px-3 py-1.5 bg-purple-200 text-slate-900"
+          />
+          <p v-if="errors.phone" class="text-brand-rose text-sm mt-1">{{ errors.phone[0] }}</p>
+        </div>
+
+        <div>
+          <label class="title-gradient block text-sm font-semibold">Address <span class="text-brand-rose">*</span></label>
+          <input
+            v-model="address"
+            type="text"
+            required
+            class="mt-1 w-full border border-purple-400 rounded px-3 py-1.5 bg-purple-200 text-slate-900"
+          />
+          <p v-if="errors.address" class="text-brand-rose text-sm mt-1">{{ errors.address[0] }}</p>
+        </div>
       </div>
 
       <div class="space-y-3">
